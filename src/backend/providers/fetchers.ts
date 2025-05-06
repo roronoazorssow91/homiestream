@@ -2,7 +2,11 @@ import { Fetcher, makeSimpleProxyFetcher } from "@movie-web/providers";
 
 import { sendExtensionRequest } from "@/backend/extension/messaging";
 import { getApiToken, setApiToken } from "@/backend/helpers/providerApi";
-import { getProviderApiUrls, getProxyUrls } from "@/utils/proxyUrls";
+import {
+  getM3u8ProxyUrls,
+  getProviderApiUrls,
+  getProxyUrls,
+} from "@/utils/proxyUrls";
 
 import { convertBodyToObject, getBodyTypeFromBody } from "../extension/request";
 
@@ -22,6 +26,8 @@ function makeLoadbalancedList(getter: () => string[]) {
 export const getLoadbalancedProxyUrl = makeLoadbalancedList(getProxyUrls);
 export const getLoadbalancedProviderApiUrl =
   makeLoadbalancedList(getProviderApiUrls);
+export const getLoadbalancedM3u8ProxyUrl =
+  makeLoadbalancedList(getM3u8ProxyUrls);
 
 async function fetchButWithApiTokens(
   input: RequestInfo | URL,
@@ -46,10 +52,18 @@ async function fetchButWithApiTokens(
 
 export function makeLoadBalancedSimpleProxyFetcher() {
   const fetcher: Fetcher = async (a, b) => {
+    const corsProxy = getLoadbalancedProxyUrl();
     const currentFetcher = makeSimpleProxyFetcher(
-      getLoadbalancedProxyUrl(),
+      corsProxy,
       fetchButWithApiTokens,
     );
+
+    // Store the M3U8 proxy URL in a global var for the provider package to pick up
+    const m3u8Proxies = getM3u8ProxyUrls();
+    if (typeof window !== "undefined" && m3u8Proxies.length > 0) {
+      (window as any).__mw_m3u8_proxy__ = getLoadbalancedM3u8ProxyUrl();
+    }
+
     return currentFetcher(a, b);
   };
   return fetcher;
